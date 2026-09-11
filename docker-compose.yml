@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: stoka-habita-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5434:5432"
+    environment:
+      POSTGRES_USER: stoka
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solo-desarrollo-local}
+      POSTGRES_DB: stoka_habita
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stoka -d stoka_habita"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - stoka_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  stoka_postgres_data:

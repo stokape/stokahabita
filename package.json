@@ -1,0 +1,50 @@
+{
+  "name": "stoka-habita",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:verify": "tsx scripts/verify-rls.ts",
+    "auth:verify": "tsx scripts/verify-auth.ts",
+    "payments:verify": "tsx scripts/verify-payment-api.ts",
+    "qa:capture": "tsx scripts/capture-ui.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "iron-session": "^9.0.1",
+    "lucide-react": "^1.45.0",
+    "next": "16.3.4",
+    "pg": "^8.23.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.3.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.34.0",
+    "eslint-config-next": "16.3.4",
+    "tsx": "^4.23.13",
+    "typescript": "6.0.3",
+    "vitest": "^5.0.0"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
+    }
+  }
+}

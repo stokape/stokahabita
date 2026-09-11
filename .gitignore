@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+coverage/
+test-results/
+playwright-report/
+.impeccable/
+design-system/
+*.md
+!/README.md
+!/SECURITY.md
+*.tsbuildinfo
+.env*
+!.env.example
+*.log
+.DS_Store
