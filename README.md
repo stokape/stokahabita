@@ -32,7 +32,8 @@ Abre `http://localhost:3002/database`. El acceso de desarrollo permite probar la
 
 - Los Jardines con 3 torres, 96 unidades y vista comparativa.
 - Parque del Sol con 1 edificio, 24 unidades y vista simplificada.
-- Panel de junta, unidades, personas/permisos, finanzas, conciliación, mantenimiento, reservas, incidencias, asambleas, documentos, comunicados, transferencia de gestión, operador y portal móvil.
+- Panel de junta, unidades, personas/permisos, finanzas, morosidad y convenios, proveedores y concursos, portería, conciliación, mantenimiento, reservas, incidencias, asambleas, documentos, comunicados, transferencia de gestión, operador y portal móvil.
+- Portada con ocho demos independientes para presidente, tesorero y secretario de junta; propietario; administrador de condominio; conserje de turno; personal de mantenimiento; y super admin de Stoka Habita. Cada perfil abre su propio espacio y permite volver con `Cambiar demo`; esta selección no sustituye autenticación ni autorización de servidor.
 - Interacciones demo con estado en memoria y mensajes explícitos cuando no existe persistencia o integración.
 - Esquema PostgreSQL para 21 entidades, migraciones, datos semilla, RLS por tenant y auditoría inmutable.
 - Confirmación persistente de pagos con permiso de servidor, bloqueo de duplicados, transacción y registro de auditoría.

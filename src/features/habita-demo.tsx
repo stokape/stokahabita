@@ -15,6 +15,7 @@ import {
   FileArchive,
   FileCheck2,
   FolderLock,
+  HandCoins,
   Handshake,
   Home,
   Landmark,
@@ -24,6 +25,7 @@ import {
   ReceiptText,
   ShieldCheck,
   Siren,
+  Store,
   Users,
   WalletCards,
   Wrench,
@@ -45,8 +47,23 @@ import {
   ReservationsView,
   UnitsView,
 } from "@/features/operations-views";
+import { ArrearsView, ConciergeView, ProvidersView } from "@/features/advanced-operations-views";
 
-type View = "summary" | "towers" | "units" | "people" | "finance" | "maintenance" | "reservations" | "assemblies" | "documents" | "communications" | "incidents" | "continuity" | "operator" | "owner";
+type View = "summary" | "towers" | "units" | "people" | "finance" | "arrears" | "providers" | "maintenance" | "reservations" | "concierge" | "assemblies" | "documents" | "communications" | "incidents" | "continuity" | "operator" | "owner";
+type DemoRole = "president" | "treasurer" | "secretary" | "administrator" | "owner" | "concierge" | "maintenance" | "superadmin";
+
+const roleProfiles: Record<DemoRole, { label: string; actor: string; initials: string; description: string; access: string; defaultView: View; views: View[] }> = {
+  president: { label: "Presidente de la junta", actor: "Presidencia", initials: "PJ", description: "Gobierno, supervisión y aprobaciones del condominio.", access: "Todos los módulos del condominio y las decisiones institucionales.", defaultView: "towers", views: ["summary", "towers", "units", "people", "finance", "arrears", "providers", "maintenance", "reservations", "concierge", "assemblies", "documents", "communications", "incidents", "continuity"] },
+  treasurer: { label: "Tesorero de la junta", actor: "Carlos Vega", initials: "CV", description: "Cobranza, pagos y seguimiento financiero.", access: "Resumen, torres, finanzas, morosidad y documentos.", defaultView: "finance", views: ["summary", "towers", "finance", "arrears", "documents"] },
+  secretary: { label: "Secretario de la junta", actor: "Secretaría de la junta", initials: "SJ", description: "Actas, comunicaciones, padrón y seguimiento de acuerdos.", access: "Resumen, torres, personas, asambleas, documentos, comunicados y entrega de gestión.", defaultView: "assemblies", views: ["summary", "towers", "people", "assemblies", "documents", "communications", "continuity"] },
+  administrator: { label: "Administrador de condominio", actor: "Personal de Gestión Urbana", initials: "AD", description: "Cuenta individual del personal administrativo con acceso delegado.", access: "Operación diaria, finanzas delegadas, documentos y continuidad; sin administrar cargos de junta.", defaultView: "summary", views: ["summary", "towers", "units", "finance", "arrears", "providers", "maintenance", "reservations", "concierge", "assemblies", "documents", "communications", "incidents", "continuity"] },
+  owner: { label: "Propietario", actor: "Responsable de unidad", initials: "PR", description: "Saldo, recibos, avisos y gestiones de la unidad.", access: "Solo su unidad, recibos, avisos y solicitudes autorizadas.", defaultView: "owner", views: ["owner"] },
+  concierge: { label: "Conserje de turno", actor: "Personal de conserjería", initials: "CT", description: "Cuenta individual del turno para ingresos, encomiendas e incidencias.", access: "Portería, incidencias operativas y avisos; sin finanzas ni archivos privados.", defaultView: "concierge", views: ["concierge", "incidents", "communications"] },
+  maintenance: { label: "Personal de mantenimiento", actor: "Técnico de mantenimiento", initials: "PM", description: "Cuenta individual para activos, tareas e incidencias asignadas.", access: "Mantenimiento, incidencias y documentos técnicos.", defaultView: "maintenance", views: ["maintenance", "incidents", "documents"] },
+  superadmin: { label: "Super admin · Stoka Habita", actor: "Super administrador", initials: "SA", description: "Clientes, membresías y soporte excepcional de la plataforma.", access: "Operación SaaS y solicitudes de soporte temporal; sin acceso general a datos privados.", defaultView: "operator", views: ["operator"] },
+};
+
+const demoRoleOrder: DemoRole[] = ["president", "treasurer", "secretary", "administrator", "owner", "concierge", "maintenance", "superadmin"];
 
 const money = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 0 });
 
@@ -61,6 +78,8 @@ const permissionLabels: Record<Permission, string> = {
 
 export function HabitaDemo() {
   const [tenantId, setTenantId] = useState<TenantId>("los-jardines");
+  const [role, setRole] = useState<DemoRole>("president");
+  const [selectingRole, setSelectingRole] = useState(true);
   const [view, setView] = useState<View>("towers");
   const [menuOpen, setMenuOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -74,10 +93,17 @@ export function HabitaDemo() {
 
   const tenant = selectTenant(demoTenants, tenantId) ?? demoTenants[0];
   const totals = useMemo(() => tenantTotals(tenant), [tenant]);
+  const roleProfile = roleProfiles[role];
+  const actor = role === "president" ? { name: tenant.people[0].name, initials: tenant.people[0].initials } : { name: roleProfile.actor, initials: roleProfile.initials };
+  const canView = (candidate: View) => roleProfile.views.includes(candidate);
+  const resetWorkspacePosition = () => requestAnimationFrame(() => {
+    document.getElementById("main-content")?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  });
 
   function changeTenant(nextId: TenantId) {
     setTenantId(nextId);
-    setView("towers");
+    setView(roleProfile.defaultView);
     setPaymentOpen(false);
     setMovement("");
     setVerified(false);
@@ -91,6 +117,25 @@ export function HabitaDemo() {
     setPaymentOpen(false);
   }
 
+  function changeRole(nextRole: DemoRole) {
+    const nextProfile = roleProfiles[nextRole];
+    setRole(nextRole);
+    setView(nextProfile.defaultView);
+    setMenuOpen(false);
+    setPaymentOpen(false);
+    setSelectingRole(false);
+    setNotice("");
+    resetWorkspacePosition();
+  }
+
+  function openRoleHub() {
+    setSelectingRole(true);
+    setMenuOpen(false);
+    setPaymentOpen(false);
+    setNotice("");
+    resetWorkspacePosition();
+  }
+
   function confirmPayment() {
     if (!movement || !verified || paymentConfirmed) return;
     setPaymentConfirmed(true);
@@ -99,11 +144,12 @@ export function HabitaDemo() {
   }
 
   return (
-    <div ref={shellRef} className={`app-shell ${view === "owner" ? "owner-shell" : ""}`} data-ready="false">
+    <div ref={shellRef} className={`app-shell ${view === "owner" && !selectingRole ? "owner-shell" : ""} ${selectingRole ? "role-hub-shell" : ""}`} data-ready="false">
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
-      {view !== "owner" && <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`} aria-label="Navegación principal">
+      {!selectingRole && view !== "owner" && <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`} aria-label="Navegación principal">
         <div className="brand"><span className="brand-mark" aria-hidden="true"><Building2 /></span><span>Stoka <strong>Habita</strong></span></div>
         <p className="brand-subtitle">Gestión para tu condominio</p>
+        <button className="role-switch-button" onClick={openRoleHub}><span className="avatar small">{actor.initials}</span><span><strong>{roleProfile.label}</strong><small>Cambiar demo</small></span><ArrowRight /></button>
         <label className="tenant-label" htmlFor="tenant-select">Condominio</label>
         <div className="select-wrap">
           <Building2 aria-hidden="true" size={18} />
@@ -113,69 +159,97 @@ export function HabitaDemo() {
           <ChevronDown aria-hidden="true" size={16} />
         </div>
         <nav className="side-nav">
-          <span className="nav-group-label">Condominio</span>
-          <NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} />
-          <NavButton icon={<Building2 />} label={tenant.towers.length === 1 ? "Edificio" : "Torres"} active={view === "towers"} onClick={() => navigate("towers")} />
-          <NavButton icon={<Home />} label="Unidades" active={view === "units"} onClick={() => navigate("units")} />
-          <NavButton icon={<Users />} label="Personas y accesos" active={view === "people"} onClick={() => navigate("people")} />
-          <span className="nav-group-label">Operación</span>
-          <NavButton icon={<Landmark />} label="Finanzas" active={view === "finance"} onClick={() => navigate("finance")} />
-          <NavButton icon={<Wrench />} label="Mantenimiento" active={view === "maintenance"} onClick={() => navigate("maintenance")} />
-          <NavButton icon={<CalendarCheck />} label="Reservas" active={view === "reservations"} onClick={() => navigate("reservations")} />
-          <NavButton icon={<Siren />} label="Incidencias" active={view === "incidents"} onClick={() => navigate("incidents")} />
-          <span className="nav-group-label">Institucional</span>
-          <NavButton icon={<Handshake />} label="Asambleas" active={view === "assemblies"} onClick={() => navigate("assemblies")} />
-          <NavButton icon={<FolderLock />} label="Documentos" active={view === "documents"} onClick={() => navigate("documents")} />
-          <NavButton icon={<Megaphone />} label="Comunicados" active={view === "communications"} onClick={() => navigate("communications")} />
-          <NavButton icon={<FileArchive />} label="Entrega de gestión" active={view === "continuity"} onClick={() => navigate("continuity")} />
-          <span className="nav-group-label">Portales</span>
-          <NavButton icon={<Home />} label="Vista propietario" active={false} onClick={() => navigate("owner")} />
-          <NavButton icon={<ShieldCheck />} label="Operador SaaS" active={view === "operator"} onClick={() => navigate("operator")} />
+          {["summary", "towers", "units", "people"].some((item) => canView(item as View)) && <><span className="nav-group-label">Condominio</span>
+            {canView("summary") && <NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} />}
+            {canView("towers") && <NavButton icon={<Building2 />} label={tenant.towers.length === 1 ? "Edificio" : "Torres"} active={view === "towers"} onClick={() => navigate("towers")} />}
+            {canView("units") && <NavButton icon={<Home />} label="Unidades" active={view === "units"} onClick={() => navigate("units")} />}
+            {canView("people") && <NavButton icon={<Users />} label="Personas y accesos" active={view === "people"} onClick={() => navigate("people")} />}
+          </>}
+          {["finance", "arrears", "providers", "maintenance", "reservations", "concierge", "incidents"].some((item) => canView(item as View)) && <><span className="nav-group-label">Operación</span>
+            {canView("finance") && <NavButton icon={<Landmark />} label="Finanzas" active={view === "finance"} onClick={() => navigate("finance")} />}
+            {canView("arrears") && <NavButton icon={<HandCoins />} label="Morosidad y convenios" active={view === "arrears"} onClick={() => navigate("arrears")} />}
+            {canView("providers") && <NavButton icon={<Store />} label="Proveedores" active={view === "providers"} onClick={() => navigate("providers")} />}
+            {canView("maintenance") && <NavButton icon={<Wrench />} label="Mantenimiento" active={view === "maintenance"} onClick={() => navigate("maintenance")} />}
+            {canView("reservations") && <NavButton icon={<CalendarCheck />} label="Reservas" active={view === "reservations"} onClick={() => navigate("reservations")} />}
+            {canView("concierge") && <NavButton icon={<Users />} label="Portería" active={view === "concierge"} onClick={() => navigate("concierge")} />}
+            {canView("incidents") && <NavButton icon={<Siren />} label="Incidencias" active={view === "incidents"} onClick={() => navigate("incidents")} />}
+          </>}
+          {["assemblies", "documents", "communications", "continuity"].some((item) => canView(item as View)) && <><span className="nav-group-label">Institucional</span>
+            {canView("assemblies") && <NavButton icon={<Handshake />} label="Asambleas" active={view === "assemblies"} onClick={() => navigate("assemblies")} />}
+            {canView("documents") && <NavButton icon={<FolderLock />} label="Documentos" active={view === "documents"} onClick={() => navigate("documents")} />}
+            {canView("communications") && <NavButton icon={<Megaphone />} label="Comunicados" active={view === "communications"} onClick={() => navigate("communications")} />}
+            {canView("continuity") && <NavButton icon={<FileArchive />} label="Entrega de gestión" active={view === "continuity"} onClick={() => navigate("continuity")} />}
+          </>}
+          {canView("operator") && <><span className="nav-group-label">Plataforma</span><NavButton icon={<ShieldCheck />} label="Panel super admin" active={view === "operator"} onClick={() => navigate("operator")} /></>}
         </nav>
-        <div className="admin-card"><span className="avatar small">GU</span><div><strong>Gestión Urbana SAC</strong><span>Acceso demo · hasta dic. 2027</span></div></div>
+        <div className="admin-card"><span className="avatar small">{actor.initials}</span><div><strong>{actor.name}</strong><span>{roleProfile.label} · acceso simulado</span></div></div>
       </aside>}
 
-      {view !== "owner" && menuOpen && <button className="sidebar-scrim" aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} />}
+      {!selectingRole && view !== "owner" && menuOpen && <button className="sidebar-scrim" aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} />}
 
       <div className="workspace">
-        {view !== "owner" && <header className="topbar">
+        {!selectingRole && view !== "owner" && <header className="topbar">
           <button className="icon-button mobile-menu" aria-label="Abrir menú" onClick={() => setMenuOpen(true)}><Menu /></button>
-          <div className="topbar-tenant"><strong>{tenant.name}</strong><span>{tenant.city} · Junta de propietarios</span></div>
+          <div className="topbar-tenant"><strong>{role === "superadmin" ? "Operación Stoka Habita" : tenant.name}</strong><span>{role === "superadmin" ? "Vista transversal sin datos privados" : `${tenant.city} · ${roleProfile.label}`}</span></div>
           <span className="demo-pill">Datos ficticios</span>
           <button className="icon-button" aria-label="Notificaciones" onClick={() => setNotice("No hay notificaciones nuevas en esta demo.")}><Bell /></button>
-          <div className="profile"><span className="avatar">{tenantId === "los-jardines" ? "MT" : "LR"}</span><span>{tenant.people[0].name}</span></div>
+          <div className="profile"><span className="avatar">{actor.initials}</span><span>{actor.name}</span></div>
         </header>}
 
         <main className="main-content" id="main-content" tabIndex={-1}>
           <div className="demo-banner"><ShieldCheck aria-hidden="true" /><span><strong>Demo local.</strong> Los cambios viven solo en esta pestaña; no hay autenticación ni persistencia real.</span></div>
-          {view === "summary" && <SummaryView tenant={tenant} totals={totals} paymentConfirmed={paymentConfirmed} onReviewPayment={() => setPaymentOpen(true)} onGoTowers={() => navigate("towers")} />}
+          {selectingRole ? <RoleHub tenantId={tenantId} onTenantChange={changeTenant} onChoose={changeRole} /> : <>
+          {view === "summary" && <SummaryView tenant={tenant} totals={totals} paymentConfirmed={paymentConfirmed} actorName={actor.name} roleLabel={roleProfile.label} onReviewPayment={() => setPaymentOpen(true)} onGoTowers={() => navigate("towers")} />}
           {view === "towers" && <TowersView tenant={tenant} totals={totals} onReviewPayment={() => setPaymentOpen(true)} />}
           {view === "units" && <UnitsView tenant={tenant} onNotice={setNotice} />}
           {view === "people" && <PeopleView tenant={tenant} />}
           {view === "finance" && <FinanceView tenant={tenant} onNotice={setNotice} onReviewPayment={() => setPaymentOpen(true)} />}
+          {view === "arrears" && <ArrearsView tenant={tenant} onNotice={setNotice} />}
+          {view === "providers" && <ProvidersView tenant={tenant} onNotice={setNotice} />}
           {view === "maintenance" && <MaintenanceView tenant={tenant} onNotice={setNotice} />}
           {view === "reservations" && <ReservationsView tenant={tenant} onNotice={setNotice} />}
+          {view === "concierge" && <ConciergeView tenant={tenant} onNotice={setNotice} />}
           {view === "assemblies" && <AssembliesView tenant={tenant} onNotice={setNotice} />}
           {view === "documents" && <DocumentsView tenant={tenant} onNotice={setNotice} />}
           {view === "communications" && <CommunicationsView tenant={tenant} onNotice={setNotice} />}
           {view === "incidents" && <IncidentsView tenant={tenant} onNotice={setNotice} />}
           {view === "continuity" && <ContinuityView tenant={tenant} onNotice={setNotice} />}
           {view === "operator" && <OperatorView tenant={tenant} onNotice={setNotice} />}
-          {view === "owner" && <OwnerView tenant={tenant} onAction={(message) => setNotice(message)} onExit={() => navigate("towers")} />}
+          {view === "owner" && <OwnerView tenant={tenant} onAction={(message) => setNotice(message)} onExit={openRoleHub} />}
+          </>}
         </main>
 
-        {view !== "owner" && <nav className="bottom-nav" aria-label="Navegación móvil">
-          <NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} />
-          <NavButton icon={<Building2 />} label={tenant.towers.length === 1 ? "Edificio" : "Torres"} active={view === "towers"} onClick={() => navigate("towers")} />
-          <NavButton icon={<Home />} label="Mi unidad" active={false} onClick={() => navigate("owner")} />
-          <NavButton icon={<Menu />} label="Más" active={!(["summary", "towers"] as View[]).includes(view)} onClick={() => setMenuOpen(true)} />
-        </nav>}
+        {!selectingRole && view !== "owner" && <RoleBottomNav role={role} view={view} tenant={tenant} navigate={navigate} openMenu={() => setMenuOpen(true)} />}
       </div>
 
       {paymentOpen && <PaymentPanel movement={movement} verified={verified} onMovement={setMovement} onVerified={setVerified} onClose={() => setPaymentOpen(false)} onConfirm={confirmPayment} />}
       {notice && <div className="toast" role="status"><Check aria-hidden="true" /><span>{notice}</span><button aria-label="Cerrar aviso" onClick={() => setNotice("")}><X /></button></div>}
     </div>
   );
+}
+
+function RoleHub({ tenantId, onTenantChange, onChoose }: { tenantId: TenantId; onTenantChange: (tenantId: TenantId) => void; onChoose: (role: DemoRole) => void }) {
+  return <section className="role-hub" aria-labelledby="role-hub-title">
+    <div className="role-hub-brand"><span className="brand-mark" aria-hidden="true"><Building2 /></span><span>Stoka <strong>Habita</strong></span></div>
+    <div className="role-hub-heading"><div><h1 id="role-hub-title">Elige una demo independiente</h1><p>Cada perfil abre su propio espacio, navegación y contenido ficticio.</p></div><label className="hub-tenant"><span>Condominio demo</span><select value={tenantId} onChange={(event) => onTenantChange(event.target.value as TenantId)}>{demoTenants.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>
+    <div className="role-grid" aria-label="Demos disponibles">
+      {demoRoleOrder.map((roleId) => {
+        const profile = roleProfiles[roleId];
+        return <button key={roleId} className="role-option" aria-label={`Abrir demo de ${profile.label}`} onClick={() => onChoose(roleId)}><span className="avatar">{profile.initials}</span><span className="role-option-copy"><strong>{profile.label}</strong><span>{profile.description}</span><small><b>Acceso:</b> {profile.access}</small></span><span className="role-open">Abrir demo <ArrowRight /></span></button>;
+      })}
+    </div>
+    <p className="role-hub-note"><ShieldCheck />Estas vistas explican el producto. No representan cuentas, sesiones ni permisos aplicados en servidor.</p>
+  </section>;
+}
+
+function RoleBottomNav({ role, view, tenant, navigate, openMenu }: { role: DemoRole; view: View; tenant: (typeof demoTenants)[number]; navigate: (view: View) => void; openMenu: () => void }) {
+  if (role === "treasurer") return <nav className="bottom-nav items-4" aria-label="Navegación móvil"><NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} /><NavButton icon={<Landmark />} label="Finanzas" active={view === "finance"} onClick={() => navigate("finance")} /><NavButton icon={<HandCoins />} label="Morosidad" active={view === "arrears"} onClick={() => navigate("arrears")} /><NavButton icon={<Menu />} label="Más" active={view === "documents" || view === "towers"} onClick={openMenu} /></nav>;
+  if (role === "secretary") return <nav className="bottom-nav items-4" aria-label="Navegación móvil"><NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} /><NavButton icon={<Handshake />} label="Asambleas" active={view === "assemblies"} onClick={() => navigate("assemblies")} /><NavButton icon={<FolderLock />} label="Documentos" active={view === "documents"} onClick={() => navigate("documents")} /><NavButton icon={<Menu />} label="Más" active={!(["summary", "assemblies", "documents"] as View[]).includes(view)} onClick={openMenu} /></nav>;
+  if (role === "administrator") return <nav className="bottom-nav items-4" aria-label="Navegación móvil"><NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} /><NavButton icon={<Building2 />} label={tenant.towers.length === 1 ? "Edificio" : "Torres"} active={view === "towers"} onClick={() => navigate("towers")} /><NavButton icon={<Siren />} label="Incidencias" active={view === "incidents"} onClick={() => navigate("incidents")} /><NavButton icon={<Menu />} label="Más" active={!(["summary", "towers", "incidents"] as View[]).includes(view)} onClick={openMenu} /></nav>;
+  if (role === "concierge") return <nav className="bottom-nav items-3" aria-label="Navegación móvil"><NavButton icon={<Users />} label="Portería" active={view === "concierge"} onClick={() => navigate("concierge")} /><NavButton icon={<Siren />} label="Incidencias" active={view === "incidents"} onClick={() => navigate("incidents")} /><NavButton icon={<Megaphone />} label="Avisos" active={view === "communications"} onClick={() => navigate("communications")} /></nav>;
+  if (role === "maintenance") return <nav className="bottom-nav items-3" aria-label="Navegación móvil"><NavButton icon={<Wrench />} label="Tareas" active={view === "maintenance"} onClick={() => navigate("maintenance")} /><NavButton icon={<Siren />} label="Incidencias" active={view === "incidents"} onClick={() => navigate("incidents")} /><NavButton icon={<FolderLock />} label="Documentos" active={view === "documents"} onClick={() => navigate("documents")} /></nav>;
+  if (role === "superadmin") return <nav className="bottom-nav items-2" aria-label="Navegación móvil"><NavButton icon={<ShieldCheck />} label="Clientes" active={view === "operator"} onClick={() => navigate("operator")} /><NavButton icon={<Menu />} label="Cambiar rol" active={false} onClick={openMenu} /></nav>;
+  return <nav className="bottom-nav items-4" aria-label="Navegación móvil"><NavButton icon={<LayoutDashboard />} label="Resumen" active={view === "summary"} onClick={() => navigate("summary")} /><NavButton icon={<Building2 />} label={tenant.towers.length === 1 ? "Edificio" : "Torres"} active={view === "towers"} onClick={() => navigate("towers")} /><NavButton icon={<Landmark />} label="Finanzas" active={view === "finance"} onClick={() => navigate("finance")} /><NavButton icon={<Menu />} label="Más" active={!(["summary", "towers", "finance"] as View[]).includes(view)} onClick={openMenu} /></nav>;
 }
 
 function NavButton({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
@@ -186,11 +260,11 @@ function PageHeading({ title, description }: { title: string; description: strin
   return <div className="page-heading"><div><h1>{title}</h1><p>{description}</p></div><div className="period-label"><CalendarDays aria-hidden="true" />Septiembre 2026</div></div>;
 }
 
-function SummaryView({ tenant, totals, paymentConfirmed, onReviewPayment, onGoTowers }: { tenant: (typeof demoTenants)[number]; totals: ReturnType<typeof tenantTotals>; paymentConfirmed: boolean; onReviewPayment: () => void; onGoTowers: () => void }) {
+function SummaryView({ tenant, totals, paymentConfirmed, actorName, roleLabel, onReviewPayment, onGoTowers }: { tenant: (typeof demoTenants)[number]; totals: ReturnType<typeof tenantTotals>; paymentConfirmed: boolean; actorName: string; roleLabel: string; onReviewPayment: () => void; onGoTowers: () => void }) {
   const collected = totals.collected + (paymentConfirmed && tenant.id === "los-jardines" ? 300 : 0);
   const gap = Math.max(0, tenant.commitments - tenant.operationalBalance - (paymentConfirmed ? 300 : 0));
   return <>
-    <PageHeading title={`Buenos días, ${tenant.people[0].name.split(" ")[0]}`} description="Panel de junta · Lo importante del condominio, listo para revisar." />
+    <PageHeading title={`Buenos días, ${actorName.split(" ")[0]}`} description={`${roleLabel} · Lo importante del condominio, listo para revisar.`} />
     <section className="metric-grid" aria-label="Indicadores del condominio">
       <Metric icon={<WalletCards />} label="Disponible operativo" value={money.format(tenant.operationalBalance)} note="Fondos de libre disponibilidad" />
       <Metric icon={<CircleDollarSign />} label="Cobrado este mes" value={money.format(collected)} note={`${collectionRate(collected, totals.issued)}% de ${money.format(totals.issued)}`} />
@@ -254,9 +328,9 @@ function PeopleView({ tenant }: { tenant: (typeof demoTenants)[number] }) {
 function OwnerView({ tenant, onAction, onExit }: { tenant: (typeof demoTenants)[number]; onAction: (message: string) => void; onExit: () => void }) {
   const owner = tenant.owner;
   return <div className="owner-stage">
-    <div className="owner-context"><button className="owner-exit" onClick={onExit}><ArrowLeft />Volver al panel demo</button><h1>Portal del propietario</h1><p>Una vista adaptable enfocada en saldo, recibos, avisos y acciones autorizadas.</p><div className="context-list"><span><ShieldCheck />Cuenta individual, no compartida por departamento</span><span><Users />Responsables con permisos y vigencia propios</span><span><Landmark />El condominio conserva el historial</span></div></div>
+    <div className="owner-context"><button className="owner-exit" onClick={onExit}><ArrowLeft />Volver a las demos</button><h1>Portal del propietario</h1><p>Una vista adaptable enfocada en saldo, recibos, avisos y acciones autorizadas.</p><div className="context-list"><span><ShieldCheck />Cuenta individual, no compartida por departamento</span><span><Users />Responsables con permisos y vigencia propios</span><span><Landmark />El condominio conserva el historial</span></div></div>
     <section className="phone-frame" aria-label="Vista móvil del propietario">
-      <div className="phone-top"><button className="phone-exit" aria-label="Volver al panel demo" onClick={onExit}><ArrowLeft /></button><div><small>{tenant.name}</small><strong>Hola, {owner.personName.split(" ")[0]}</strong></div><span className="avatar">{owner.personName.split(" ").map((part) => part[0]).join("")}</span></div>
+      <div className="phone-top"><button className="phone-exit" aria-label="Volver a las demos" onClick={onExit}><ArrowLeft /></button><div><small>{tenant.name}</small><strong>Hola, {owner.personName.split(" ")[0]}</strong></div><span className="avatar">{owner.personName.split(" ").map((part) => part[0]).join("")}</span></div>
       <div className="unit-chip"><Home />Unidad {owner.unit}<ChevronDown /></div>
       <article className={`balance-card ${owner.balance === 0 ? "settled" : ""}`}><span>{owner.balance === 0 ? "Estás al día" : "Saldo por pagar"}</span><strong>{money.format(owner.balance)}</strong><small>{owner.dueDate}</small>{owner.balance > 0 && <button onClick={() => onAction("Se abrió el flujo demo para reportar un pago. No se envió información.")}>Reportar pago <ArrowRight /></button>}</article>
       <section className="owner-section"><div className="section-heading"><h2>Mi recibo</h2><span>Septiembre</span></div><button className="receipt-card" onClick={() => onAction("Vista previa demo del recibo. No es un comprobante tributario.")}><span className="row-icon"><ReceiptText /></span><span><strong>{owner.pendingReceipt}</strong><small>{owner.balance === 0 ? "Pagado en demo" : "Pendiente"}</small></span><ArrowRight /></button></section>
