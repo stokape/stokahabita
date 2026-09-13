@@ -43,6 +43,7 @@ export const demoTenants: Tenant[] = [
     owner: {
       personName: "Ana Pérez",
       unit: "A-203",
+      parking: { level: "Sótano 1", number: "E-18" },
       balance: 300,
       dueDate: "15 sep. 2026",
       pendingReceipt: "Mantenimiento de septiembre",
@@ -70,6 +71,7 @@ export const demoTenants: Tenant[] = [
     owner: {
       personName: "Diego Salas",
       unit: "502",
+      parking: { level: "Semisótano", number: "12" },
       balance: 0,
       dueDate: "Sin pagos pendientes",
       pendingReceipt: "Mantenimiento de septiembre",

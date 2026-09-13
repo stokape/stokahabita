@@ -28,6 +28,25 @@ export type ConciergeEntry = {
   state: "inside" | "waiting" | "closed";
 };
 
+export type PaymentReminderRecipient = {
+  id: string;
+  unit: string;
+  name: string;
+  email: string;
+  balance: number;
+  dueDate: string;
+};
+
+export type PaymentReminder = {
+  id: string;
+  tenantId: TenantId;
+  units: string[];
+  sender: string;
+  message: string;
+  channels: Array<"app" | "email">;
+  sentAt: string;
+};
+
 export const arrearsByTenant: Record<TenantId, ArrearsCase[]> = {
   "los-jardines": [
     { id: "COB-041", unit: "A-402", balance: 1200, age: "61–90 días", contact: "08 sep.", nextAction: "Revisar propuesta", state: "proposal" },
@@ -37,6 +56,19 @@ export const arrearsByTenant: Record<TenantId, ArrearsCase[]> = {
   "parque-del-sol": [
     { id: "COB-012", unit: "604", balance: 440, age: "31–60 días", contact: "07 sep.", nextAction: "Contactar responsable", state: "followup" },
     { id: "COB-009", unit: "203", balance: 240, age: "61–90 días", contact: "01 sep.", nextAction: "Revisar propuesta", state: "proposal" },
+  ],
+};
+
+export const paymentReminderRecipientsByTenant: Record<TenantId, PaymentReminderRecipient[]> = {
+  "los-jardines": [
+    { id: "REC-203", unit: "A-203", name: "Ana Pérez", email: "ana.perez@correo.demo", balance: 300, dueDate: "15 sep. 2026" },
+    { id: "REC-402", unit: "A-402", name: "Rosa Medina", email: "rosa.medina@correo.demo", balance: 1200, dueDate: "31 ago. 2026" },
+    { id: "REC-704", unit: "B-704", name: "Jorge Salas", email: "jorge.salas@correo.demo", balance: 900, dueDate: "31 ago. 2026" },
+    { id: "REC-201", unit: "C-201", name: "Lucía Campos", email: "lucia.campos@correo.demo", balance: 600, dueDate: "31 ago. 2026" },
+  ],
+  "parque-del-sol": [
+    { id: "REC-604", unit: "604", name: "Diego Salas", email: "diego.salas@correo.demo", balance: 440, dueDate: "31 ago. 2026" },
+    { id: "REC-203-P", unit: "203", name: "Elena Vargas", email: "elena.vargas@correo.demo", balance: 240, dueDate: "31 ago. 2026" },
   ],
 };
 

@@ -17,6 +17,10 @@ async function main() {
     await desktop.locator("#main-content").focus();
     await desktop.waitForTimeout(50);
     await desktop.screenshot({ path: `${output}/desktop.png`, fullPage: true });
+    await desktop.getByRole("button", { name: "Alertas de pago", exact: true }).click();
+    await desktop.getByRole("button", { name: "Seleccionar todos", exact: true }).click();
+    await desktop.waitForTimeout(220);
+    await desktop.screenshot({ path: `${output}/payment-alerts.png`, fullPage: true });
 
     const singleTower = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await singleTower.emulateMedia({ reducedMotion: "reduce" });
@@ -42,6 +46,13 @@ async function main() {
     await owner.emulateMedia({ reducedMotion: "reduce" });
     await owner.goto(baseURL);
     await owner.locator(".app-shell[data-ready=true]").waitFor();
+    await owner.getByRole("button", { name: "Abrir demo de Secretario de la junta", exact: true }).click();
+    await owner.getByRole("button", { name: "Abrir menú" }).click();
+    await owner.getByRole("button", { name: "Alertas de pago", exact: true }).click();
+    await owner.getByRole("checkbox", { name: /A-203 · Ana Pérez/ }).check();
+    await owner.getByRole("button", { name: "Enviar alertas en demo" }).click();
+    await owner.getByRole("button", { name: "Abrir menú" }).click();
+    await owner.getByRole("button", { name: "Cambiar demo" }).click();
     await owner.getByRole("button", { name: "Abrir demo de Propietario", exact: true }).click();
     await owner.locator("#main-content").focus();
     await owner.waitForTimeout(50);

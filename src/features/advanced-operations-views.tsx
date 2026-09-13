@@ -1,9 +1,12 @@
 "use client";
 
-import { ArrowRight, Check, ClipboardList, HandCoins, Package, Plus, ShieldCheck, Truck, UserRoundCheck } from "lucide-react";
+import { ArrowRight, BellRing, Check, ClipboardList, HandCoins, Mail, Package, Plus, Send, ShieldCheck, Smartphone, Truck, UserRoundCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Tenant } from "@/domain/models";
-import { arrearsByTenant, conciergeByTenant, providersByTenant } from "@/data/demo/advanced";
+import type { AccessRequest, PlateAuthorization } from "@/domain/community";
+import { arrearsByTenant, conciergeByTenant, paymentReminderRecipientsByTenant, providersByTenant, type PaymentReminder } from "@/data/demo/advanced";
+import { ConciergeAuthorizedAccess } from "@/features/community-access";
+import { useDemoState } from "@/lib/demo-storage";
 
 const money = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 0 });
 type Props = { tenant: Tenant; onNotice: (message: string) => void };
@@ -21,7 +24,7 @@ export function ArrearsView({ tenant, onNotice }: Props) {
   const [selected, setSelected] = useState(cases[0]?.id ?? "");
   const [initialPayment, setInitialPayment] = useState(300);
   const [installments, setInstallments] = useState(3);
-  const [proposed, setProposed] = useState<string[]>([]);
+  const [proposed, setProposed] = useDemoState<string[]>(`arrears-proposals:${tenant.id}`, []);
   const active = cases.find((item) => item.id === selected) ?? cases[0];
   const remaining = Math.max(0, active.balance - initialPayment);
   const installmentAmount = remaining / installments;
@@ -55,10 +58,54 @@ export function ArrearsView({ tenant, onNotice }: Props) {
   </>;
 }
 
+export function PaymentRemindersView({ tenant, sender, sentReminders, onSend, onNotice }: Props & { sender: string; sentReminders: PaymentReminder[]; onSend: (reminder: PaymentReminder) => void }) {
+  const recipients = paymentReminderRecipientsByTenant[tenant.id];
+  const [selected, setSelected] = useState<string[]>([]);
+  const [channels, setChannels] = useState<Array<"app" | "email">>(["app", "email"]);
+  const [message, setMessage] = useState("Te recordamos que tienes una cuota de mantenimiento pendiente. Revisa el detalle en Stoka Habita o responde este correo si ya realizaste el pago.");
+  const selectedRecipients = recipients.filter((recipient) => selected.includes(recipient.id));
+  const total = selectedRecipients.reduce((sum, recipient) => sum + recipient.balance, 0);
+
+  function toggleRecipient(id: string) {
+    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function toggleChannel(channel: "app" | "email") {
+    setChannels((current) => current.includes(channel) ? current.filter((item) => item !== channel) : [...current, channel]);
+  }
+
+  function sendReminder(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selected.length || !channels.length || !message.trim()) return;
+    onSend({ id: `REM-${tenant.id}-${sentReminders.length + 1}`, tenantId: tenant.id, units: selectedRecipients.map((recipient) => recipient.unit), sender, message: message.trim(), channels, sentAt: "Ahora" });
+    const channelCopy = channels.length === 2 ? "la app demo y el correo simulado" : channels[0] === "app" ? "la app demo" : "el correo simulado";
+    onNotice(`${selected.length} ${selected.length === 1 ? "alerta preparada" : "alertas preparadas"} para ${channelCopy}. No se envió ningún correo real.`);
+  }
+
+  return <>
+    <ModuleHeading title="Alertas de pago" description="Recordatorios dirigidos a responsables con cuotas pendientes, desde un solo flujo controlado." />
+    <DemoNotice>Las alertas aparecen dentro del portal del propietario durante esta sesión. El correo se simula: aún no existe un proveedor de envío conectado.</DemoNotice>
+    <form className="reminder-layout" onSubmit={sendReminder}>
+      <section className="data-panel recipient-panel">
+        <div className="panel-title"><div><h2>Destinatarios pendientes</h2><span>{recipients.length} responsables ficticios</span></div><button type="button" className="text-button" onClick={() => setSelected(selected.length === recipients.length ? [] : recipients.map((recipient) => recipient.id))}>{selected.length === recipients.length ? "Quitar selección" : "Seleccionar todos"}</button></div>
+        <div className="recipient-list">{recipients.map((recipient) => <label key={recipient.id} className={selected.includes(recipient.id) ? "selected" : ""}><input type="checkbox" checked={selected.includes(recipient.id)} onChange={() => toggleRecipient(recipient.id)} /><span><strong>{recipient.unit} · {recipient.name}</strong><small>{recipient.email} · venció {recipient.dueDate}</small></span><b>{money.format(recipient.balance)}</b></label>)}</div>
+      </section>
+      <section className="data-panel reminder-compose">
+        <div className="panel-title"><h2>Preparar alerta</h2><BellRing /></div>
+        <fieldset className="channel-options"><legend>Canales</legend><label><input type="checkbox" checked={channels.includes("app")} onChange={() => toggleChannel("app")} /><Smartphone /><span><strong>App del propietario</strong><small>Visible en su portal demo</small></span></label><label><input type="checkbox" checked={channels.includes("email")} onChange={() => toggleChannel("email")} /><Mail /><span><strong>Correo electrónico</strong><small>Simulado, sin envío externo</small></span></label></fieldset>
+        <label className="field"><span>Mensaje</span><textarea rows={5} value={message} onChange={(event) => setMessage(event.target.value)} /></label>
+        <div className="reminder-summary"><span>{selected.length} {selected.length === 1 ? "destinatario" : "destinatarios"}</span><strong>{money.format(total)} pendiente</strong></div>
+        <button className="primary-button" disabled={!selected.length || !channels.length || !message.trim()}><Send />Enviar alertas en demo</button>
+      </section>
+    </form>
+    {sentReminders.length > 0 && <section className="data-panel delivery-panel"><div className="panel-title"><h2>Actividad de esta sesión</h2><span>{sentReminders.length} {sentReminders.length === 1 ? "envío" : "envíos"}</span></div>{sentReminders.map((reminder) => <article key={reminder.id}><span className="task-icon"><Check /></span><span><strong>{reminder.units.join(", ")}</strong><small>{reminder.sender} · {reminder.sentAt}</small></span><span>{reminder.channels.includes("app") ? "App demo entregada" : "Sin app"}<small>{reminder.channels.includes("email") ? "Correo simulado" : "Sin correo"}</small></span></article>)}</section>}
+  </>;
+}
+
 export function ProvidersView({ tenant, onNotice }: Props) {
   const providers = providersByTenant[tenant.id];
   const candidates = providers.filter((item) => item.service.includes("cotización") || item.state === "review");
-  const [shortlisted, setShortlisted] = useState<string[]>([]);
+  const [shortlisted, setShortlisted] = useDemoState<string[]>(`providers:${tenant.id}`, []);
   return <>
     <ModuleHeading title="Proveedores y concursos" description="Contratos, vencimientos y cotizaciones comparables con una decisión documentada." />
     <DemoNotice>No se contrata ni contacta a proveedores desde este flujo demostrativo.</DemoNotice>
@@ -70,9 +117,9 @@ export function ProvidersView({ tenant, onNotice }: Props) {
   </>;
 }
 
-export function ConciergeView({ tenant, onNotice }: Props) {
+export function ConciergeView({ tenant, onNotice, authorizedRequests, activePlates, onAccessState }: Props & { authorizedRequests: AccessRequest[]; activePlates: PlateAuthorization[]; onAccessState: (id: string, state: AccessRequest["state"]) => void }) {
   const initial = conciergeByTenant[tenant.id];
-  const [entries, setEntries] = useState(initial);
+  const [entries, setEntries] = useDemoState(`concierge:${tenant.id}`, initial);
   const [kind, setKind] = useState<"Visita" | "Paquete" | "Trabajo">("Visita");
   const [detail, setDetail] = useState("");
   const [unit, setUnit] = useState(tenant.owner.unit);
@@ -94,6 +141,7 @@ export function ConciergeView({ tenant, onNotice }: Props) {
   return <>
     <ModuleHeading title="Portería" description="Registro mínimo de visitas, paquetes y trabajos con acceso limitado al turno operativo." />
     <DemoNotice>La portería demo ve solo lo necesario para atender el ingreso; no expone finanzas ni documentos privados.</DemoNotice>
+    <ConciergeAuthorizedAccess requests={authorizedRequests} plates={activePlates} onState={onAccessState} onNotice={onNotice} />
     <div className="concierge-layout"><form className="data-panel concierge-form" onSubmit={addEntry}><div className="panel-title"><h2>Nuevo registro</h2><Plus /></div>
       <label className="field"><span>Tipo</span><select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option>Visita</option><option>Paquete</option><option>Trabajo</option></select></label>
       <label className="field"><span>{kind === "Paquete" ? "Empresa o remitente" : "Nombre o descripción"}</span><input required value={detail} onChange={(event) => setDetail(event.target.value)} placeholder={kind === "Paquete" ? "Ej. Olva Courier" : "Ej. Carmen Ruiz"} /></label>

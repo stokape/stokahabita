@@ -56,7 +56,7 @@ test("la vista móvil no desborda y abre el portal del propietario", async ({ pa
   await expect(page.getByRole("button", { name: /Reportar pago/ })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Navegación móvil" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Abrir menú" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Volver a las demos" }).click();
+  await page.getByRole("button", { name: "Volver a las demos" }).first().click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole("heading", { name: "Elige una demo independiente" })).toBeVisible();
 });
@@ -179,6 +179,87 @@ test("abre morosidad desde Más sin desborde móvil", async ({ page }, testInfo)
   expect(widths.scroll).toBeLessThanOrEqual(widths.viewport);
 });
 
+test("la junta envía alertas de pago a la app y simula el correo", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile", "El flujo multirrol se cubre una vez en escritorio.");
+  await openRoleHub(page);
+
+  for (const role of ["Presidente de la junta", "Tesorero de la junta", "Secretario de la junta"]) {
+    await page.getByRole("button", { name: `Abrir demo de ${role}` }).click();
+    await expect(page.getByRole("button", { name: "Alertas de pago", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cambiar demo" }).click();
+  }
+
+  await page.getByRole("button", { name: "Abrir demo de Administrador de condominio" }).click();
+  await expect(page.getByRole("button", { name: "Alertas de pago", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Cambiar demo" }).click();
+
+  await page.getByRole("button", { name: "Abrir demo de Secretario de la junta" }).click();
+  await page.getByRole("button", { name: "Alertas de pago", exact: true }).click();
+  await page.getByRole("checkbox", { name: /A-203 · Ana Pérez/ }).check();
+  await page.getByRole("button", { name: "Enviar alertas en demo" }).click();
+  await expect(page.getByRole("status")).toContainText("la app demo y el correo simulado");
+  await expect(page.getByText("App demo entregada")).toBeVisible();
+  await expect(page.getByText("Correo simulado", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Cambiar demo" }).click();
+  await page.getByRole("button", { name: "Abrir demo de Propietario" }).click();
+  await expect(page.getByLabel("Nueva alerta de pago")).toContainText("Recordatorio de la junta");
+  await expect(page.getByLabel("Nueva alerta de pago")).toContainText("también enviado por correo demo");
+});
+
+test("alertas de pago mantiene el flujo usable en móvil", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Validación específica del viewport móvil.");
+  await openRoleHub(page);
+  await page.getByRole("button", { name: "Abrir demo de Secretario de la junta" }).click();
+  await page.getByRole("button", { name: "Abrir menú" }).click();
+  await page.getByRole("button", { name: "Alertas de pago", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Alertas de pago" })).toBeVisible();
+  const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: window.innerWidth }));
+  expect(widths.scroll).toBeLessThanOrEqual(widths.viewport);
+  await page.getByRole("checkbox", { name: /A-203 · Ana Pérez/ }).check();
+  await expect(page.getByRole("button", { name: "Enviar alertas en demo" })).toBeEnabled();
+});
+
+test("conecta accesos, placas y reservas entre propietario, portería y junta", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile", "El flujo multirrol se cubre una vez en escritorio.");
+  await openRoleHub(page);
+  await page.getByRole("button", { name: "Abrir demo de Propietario" }).click();
+
+  await page.getByRole("button", { name: "Accesos", exact: true }).click();
+  await page.getByLabel("Una o más personas").fill("Elena Ruiz, Martín Ruiz");
+  await page.getByLabel("Tipo de acceso").selectOption("Vehicular");
+  await page.getByLabel("Placa visitante").fill("TST-909");
+  await page.getByRole("button", { name: "Autorizar acceso" }).click();
+  await expect(page.getByText("Elena Ruiz, Martín Ruiz")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Editar acceso de Elena Ruiz/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Eliminar/ })).toHaveCount(0);
+
+  await page.getByLabel("Nueva placa").fill("NEW-456");
+  await page.getByRole("button", { name: "Solicitar aprobación" }).click();
+  await expect(page.getByText("NEW-456")).toBeVisible();
+  await expect(page.getByText("Por aprobar").last()).toBeVisible();
+
+  await page.getByRole("button", { name: "Reservas", exact: true }).click();
+  await page.getByLabel("Área común").selectOption("cine");
+  await page.getByRole("button", { name: "Solicitar reserva" }).click();
+  await expect(page.getByRole("article").getByText("Sala de cine", { exact: true })).toBeVisible();
+  await expect(page.getByText("Garantía reembolsable")).toBeVisible();
+
+  await page.getByRole("button", { name: "Volver a las demos" }).first().click();
+  await page.getByRole("button", { name: "Abrir demo de Conserje de turno" }).click();
+  await expect(page.getByText("Elena Ruiz, Martín Ruiz")).toBeVisible();
+  await expect(page.getByText("TST-909")).toBeVisible();
+  await page.locator(".authorized-access article").filter({ hasText: "Elena Ruiz" }).getByRole("button", { name: "Registrar ingreso" }).click();
+
+  await page.getByRole("button", { name: "Cambiar demo" }).click();
+  await page.getByRole("button", { name: "Abrir demo de Presidente de la junta" }).click();
+  await page.getByRole("button", { name: "Personas y accesos", exact: true }).click();
+  await expect(page.getByText("NEW-456")).toBeVisible();
+  await page.locator(".plate-review-list article").filter({ hasText: "NEW-456" }).getByRole("button", { name: "Aprobar", exact: true }).click();
+  await expect(page.locator(".plate-review-list article").filter({ hasText: "NEW-456" }).getByText("Aprobó: María Torres")).toBeVisible();
+  await expect(page.getByText("Sala de cine · unidad A-203")).toBeVisible();
+});
+
 test("documentos permanecen locales y la entrega exige todos los bloques", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "El recorrido amplio se cubre una vez en escritorio.");
   await openApp(page);
@@ -189,10 +270,40 @@ test("documentos permanecen locales y la entrega exige todos los bloques", async
   await expect(page.getByRole("status")).toContainText("No se subió");
 
   await page.getByRole("button", { name: "Entrega de gestión", exact: true }).click();
-  const accept = page.getByRole("button", { name: "Aceptar entrega demo" });
+  await page.getByRole("button", { name: "Más información sobre Transferencia de junta de propietarios" }).hover();
+  await expect(page.getByRole("tooltip").first()).toBeVisible();
+  await expect(page.getByRole("tooltip").first()).toContainText("Para qué sirve");
+  await page.getByRole("button", { name: "Elegir esta transferencia" }).first().click();
+  const accept = page.getByRole("button", { name: "Aceptar transferencia demo" });
   await expect(accept).toBeDisabled();
   for (const checkbox of await page.getByRole("checkbox").all()) {
     if (!(await checkbox.isChecked())) await checkbox.check();
   }
   await expect(accept).toBeEnabled();
+});
+
+test("guarda cambios ficticios, recoge feedback y permite reiniciar la demo", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile", "El flujo persistente se cubre una vez en escritorio.");
+  await openApp(page);
+  await page.getByRole("button", { name: "Unidades", exact: true }).click();
+  await page.getByRole("button", { name: "Nueva unidad" }).click();
+  await page.getByLabel("Código").fill("A-999");
+  await page.getByRole("button", { name: "Crear en demo" }).click();
+  await expect(page.getByText("A-999", { exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Abrir demo de Presidente de la junta" }).click();
+  await page.getByRole("button", { name: "Unidades", exact: true }).click();
+  await expect(page.getByText("A-999", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: /Enviar feedback/ }).click();
+  await page.getByLabel("Tipo de comentario").selectOption("Sugerencia");
+  await page.getByRole("textbox", { name: "Comentario", exact: true }).fill("Agregar un filtro para distinguir unidades ocupadas y vacías.");
+  await page.getByRole("button", { name: "Guardar feedback" }).click();
+  await expect(page.getByRole("status")).toContainText("Feedback guardado");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Reiniciar" }).click();
+  await expect(page.getByRole("status")).toContainText("estado inicial");
+  await expect(page.getByText("A-999", { exact: true })).toHaveCount(0);
 });

@@ -33,6 +33,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { demoTenants } from "@/data/demo/tenants";
+import type { PaymentReminder } from "@/data/demo/advanced";
+import { initialAccessRequests, initialPlateAuthorizations } from "@/data/demo/community";
+import type { AccessRequest, PlateAuthorization, ResidentReservation } from "@/domain/community";
 import type { Permission, TenantId } from "@/domain/models";
 import { collectionRate, selectTenant, tenantTotals } from "@/lib/demo-selectors";
 import {
@@ -47,15 +50,18 @@ import {
   ReservationsView,
   UnitsView,
 } from "@/features/operations-views";
-import { ArrearsView, ConciergeView, ProvidersView } from "@/features/advanced-operations-views";
+import { ArrearsView, ConciergeView, PaymentRemindersView, ProvidersView } from "@/features/advanced-operations-views";
+import { BoardAccessPanel, OwnerAccessView, OwnerReservationsView } from "@/features/community-access";
+import { DemoTools } from "@/features/demo-tools";
+import { resetDemoStorage, useDemoState } from "@/lib/demo-storage";
 
-type View = "summary" | "towers" | "units" | "people" | "finance" | "arrears" | "providers" | "maintenance" | "reservations" | "concierge" | "assemblies" | "documents" | "communications" | "incidents" | "continuity" | "operator" | "owner";
+type View = "summary" | "towers" | "units" | "people" | "finance" | "arrears" | "reminders" | "providers" | "maintenance" | "reservations" | "concierge" | "assemblies" | "documents" | "communications" | "incidents" | "continuity" | "operator" | "owner";
 type DemoRole = "president" | "treasurer" | "secretary" | "administrator" | "owner" | "concierge" | "maintenance" | "superadmin";
 
 const roleProfiles: Record<DemoRole, { label: string; actor: string; initials: string; description: string; access: string; defaultView: View; views: View[] }> = {
-  president: { label: "Presidente de la junta", actor: "Presidencia", initials: "PJ", description: "Gobierno, supervisión y aprobaciones del condominio.", access: "Todos los módulos del condominio y las decisiones institucionales.", defaultView: "towers", views: ["summary", "towers", "units", "people", "finance", "arrears", "providers", "maintenance", "reservations", "concierge", "assemblies", "documents", "communications", "incidents", "continuity"] },
-  treasurer: { label: "Tesorero de la junta", actor: "Carlos Vega", initials: "CV", description: "Cobranza, pagos y seguimiento financiero.", access: "Resumen, torres, finanzas, morosidad y documentos.", defaultView: "finance", views: ["summary", "towers", "finance", "arrears", "documents"] },
-  secretary: { label: "Secretario de la junta", actor: "Secretaría de la junta", initials: "SJ", description: "Actas, comunicaciones, padrón y seguimiento de acuerdos.", access: "Resumen, torres, personas, asambleas, documentos, comunicados y entrega de gestión.", defaultView: "assemblies", views: ["summary", "towers", "people", "assemblies", "documents", "communications", "continuity"] },
+  president: { label: "Presidente de la junta", actor: "Presidencia", initials: "PJ", description: "Gobierno, supervisión y aprobaciones del condominio.", access: "Todos los módulos del condominio, alertas de pago y decisiones institucionales.", defaultView: "towers", views: ["summary", "towers", "units", "people", "finance", "arrears", "reminders", "providers", "maintenance", "reservations", "concierge", "assemblies", "documents", "communications", "incidents", "continuity"] },
+  treasurer: { label: "Tesorero de la junta", actor: "Carlos Vega", initials: "CV", description: "Cobranza, pagos y seguimiento financiero.", access: "Resumen, torres, finanzas, morosidad, alertas de pago y documentos.", defaultView: "finance", views: ["summary", "towers", "finance", "arrears", "reminders", "documents"] },
+  secretary: { label: "Secretario de la junta", actor: "Secretaría de la junta", initials: "SJ", description: "Actas, comunicaciones, padrón y seguimiento de acuerdos.", access: "Resumen, torres, personas, alertas de pago, asambleas, documentos, comunicados y entrega de gestión.", defaultView: "assemblies", views: ["summary", "towers", "people", "reminders", "assemblies", "documents", "communications", "continuity"] },
   administrator: { label: "Administrador de condominio", actor: "Personal de Gestión Urbana", initials: "AD", description: "Cuenta individual del personal administrativo con acceso delegado.", access: "Operación diaria, finanzas delegadas, documentos y continuidad; sin administrar cargos de junta.", defaultView: "summary", views: ["summary", "towers", "units", "finance", "arrears", "providers", "maintenance", "reservations", "concierge", "assemblies", "documents", "communications", "incidents", "continuity"] },
   owner: { label: "Propietario", actor: "Responsable de unidad", initials: "PR", description: "Saldo, recibos, avisos y gestiones de la unidad.", access: "Solo su unidad, recibos, avisos y solicitudes autorizadas.", defaultView: "owner", views: ["owner"] },
   concierge: { label: "Conserje de turno", actor: "Personal de conserjería", initials: "CT", description: "Cuenta individual del turno para ingresos, encomiendas e incidencias.", access: "Portería, incidencias operativas y avisos; sin finanzas ni archivos privados.", defaultView: "concierge", views: ["concierge", "incidents", "communications"] },
@@ -85,7 +91,11 @@ export function HabitaDemo() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [movement, setMovement] = useState("");
   const [verified, setVerified] = useState(false);
-  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useDemoState("payment-confirmed", false);
+  const [paymentReminders, setPaymentReminders] = useDemoState<PaymentReminder[]>("payment-reminders", []);
+  const [accessRequests, setAccessRequests] = useDemoState<AccessRequest[]>("access-requests", initialAccessRequests);
+  const [plateAuthorizations, setPlateAuthorizations] = useDemoState<PlateAuthorization[]>("plate-authorizations", initialPlateAuthorizations);
+  const [residentReservations, setResidentReservations] = useDemoState<ResidentReservation[]>("resident-reservations", []);
   const [notice, setNotice] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -140,7 +150,16 @@ export function HabitaDemo() {
     if (!movement || !verified || paymentConfirmed) return;
     setPaymentConfirmed(true);
     setPaymentOpen(false);
-    setNotice("Pago marcado como confirmado solo en esta sesión demo. No se guardó en un servidor.");
+    setNotice("Pago marcado como confirmado solo en esta sesión demo del navegador; el cambio permanecerá al recargar.");
+  }
+
+  function resetDemo() {
+    if (!window.confirm("¿Restablecer todos los datos ficticios y comentarios guardados en este navegador?")) return;
+    resetDemoStorage();
+    setMovement("");
+    setVerified(false);
+    setPaymentOpen(false);
+    setNotice("La demostración volvió a su estado inicial.");
   }
 
   return (
@@ -165,9 +184,10 @@ export function HabitaDemo() {
             {canView("units") && <NavButton icon={<Home />} label="Unidades" active={view === "units"} onClick={() => navigate("units")} />}
             {canView("people") && <NavButton icon={<Users />} label="Personas y accesos" active={view === "people"} onClick={() => navigate("people")} />}
           </>}
-          {["finance", "arrears", "providers", "maintenance", "reservations", "concierge", "incidents"].some((item) => canView(item as View)) && <><span className="nav-group-label">Operación</span>
+          {["finance", "arrears", "reminders", "providers", "maintenance", "reservations", "concierge", "incidents"].some((item) => canView(item as View)) && <><span className="nav-group-label">Operación</span>
             {canView("finance") && <NavButton icon={<Landmark />} label="Finanzas" active={view === "finance"} onClick={() => navigate("finance")} />}
             {canView("arrears") && <NavButton icon={<HandCoins />} label="Morosidad y convenios" active={view === "arrears"} onClick={() => navigate("arrears")} />}
+            {canView("reminders") && <NavButton icon={<Bell />} label="Alertas de pago" active={view === "reminders"} onClick={() => navigate("reminders")} />}
             {canView("providers") && <NavButton icon={<Store />} label="Proveedores" active={view === "providers"} onClick={() => navigate("providers")} />}
             {canView("maintenance") && <NavButton icon={<Wrench />} label="Mantenimiento" active={view === "maintenance"} onClick={() => navigate("maintenance")} />}
             {canView("reservations") && <NavButton icon={<CalendarCheck />} label="Reservas" active={view === "reservations"} onClick={() => navigate("reservations")} />}
@@ -197,25 +217,26 @@ export function HabitaDemo() {
         </header>}
 
         <main className="main-content" id="main-content" tabIndex={-1}>
-          <div className="demo-banner"><ShieldCheck aria-hidden="true" /><span><strong>Demo local.</strong> Los cambios viven solo en esta pestaña; no hay autenticación ni persistencia real.</span></div>
+          <div className="demo-banner"><ShieldCheck aria-hidden="true" /><span><strong>Demostración con datos ficticios.</strong> Los cambios se conservan en este navegador y puedes restablecerlos cuando quieras.</span></div>
           {selectingRole ? <RoleHub tenantId={tenantId} onTenantChange={changeTenant} onChoose={changeRole} /> : <>
           {view === "summary" && <SummaryView tenant={tenant} totals={totals} paymentConfirmed={paymentConfirmed} actorName={actor.name} roleLabel={roleProfile.label} onReviewPayment={() => setPaymentOpen(true)} onGoTowers={() => navigate("towers")} />}
           {view === "towers" && <TowersView tenant={tenant} totals={totals} onReviewPayment={() => setPaymentOpen(true)} />}
           {view === "units" && <UnitsView tenant={tenant} onNotice={setNotice} />}
-          {view === "people" && <PeopleView tenant={tenant} />}
+          {view === "people" && <PeopleView tenant={tenant} requests={accessRequests.filter((item) => item.tenantId === tenant.id)} plates={plateAuthorizations.filter((item) => item.tenantId === tenant.id)} reservations={residentReservations.filter((item) => item.tenantId === tenant.id)} approver={actor.name} onAccessState={(id, state) => setAccessRequests((current) => current.map((item) => item.id === id ? { ...item, state } : item))} onPlateState={(id, state, approvedBy) => setPlateAuthorizations((current) => current.map((item) => item.id === id ? { ...item, state, approvedBy: approvedBy ?? item.approvedBy } : item))} onReservationState={(id, state) => setResidentReservations((current) => current.map((item) => item.id === id ? { ...item, state } : item))} onNotice={setNotice} />}
           {view === "finance" && <FinanceView tenant={tenant} onNotice={setNotice} onReviewPayment={() => setPaymentOpen(true)} />}
           {view === "arrears" && <ArrearsView tenant={tenant} onNotice={setNotice} />}
+          {view === "reminders" && <PaymentRemindersView key={tenant.id} tenant={tenant} sender={roleProfile.label} sentReminders={paymentReminders.filter((reminder) => reminder.tenantId === tenant.id)} onSend={(reminder) => setPaymentReminders((current) => [reminder, ...current])} onNotice={setNotice} />}
           {view === "providers" && <ProvidersView tenant={tenant} onNotice={setNotice} />}
           {view === "maintenance" && <MaintenanceView tenant={tenant} onNotice={setNotice} />}
-          {view === "reservations" && <ReservationsView tenant={tenant} onNotice={setNotice} />}
-          {view === "concierge" && <ConciergeView tenant={tenant} onNotice={setNotice} />}
+          {view === "reservations" && <ReservationsView tenant={tenant} onNotice={setNotice} residentReservations={residentReservations.filter((item) => item.tenantId === tenant.id)} canVoid={role === "president"} onVoid={(id) => setResidentReservations((current) => current.map((item) => item.id === id ? { ...item, state: "voided" } : item))} />}
+          {view === "concierge" && <ConciergeView tenant={tenant} onNotice={setNotice} authorizedRequests={accessRequests.filter((item) => item.tenantId === tenant.id)} activePlates={plateAuthorizations.filter((item) => item.tenantId === tenant.id)} onAccessState={(id, state) => setAccessRequests((current) => current.map((item) => item.id === id ? { ...item, state } : item))} />}
           {view === "assemblies" && <AssembliesView tenant={tenant} onNotice={setNotice} />}
           {view === "documents" && <DocumentsView tenant={tenant} onNotice={setNotice} />}
           {view === "communications" && <CommunicationsView tenant={tenant} onNotice={setNotice} />}
           {view === "incidents" && <IncidentsView tenant={tenant} onNotice={setNotice} />}
           {view === "continuity" && <ContinuityView tenant={tenant} onNotice={setNotice} />}
           {view === "operator" && <OperatorView tenant={tenant} onNotice={setNotice} />}
-          {view === "owner" && <OwnerView tenant={tenant} onAction={(message) => setNotice(message)} onExit={openRoleHub} />}
+          {view === "owner" && <OwnerView tenant={tenant} reminders={paymentReminders.filter((reminder) => reminder.tenantId === tenant.id && reminder.units.includes(tenant.owner.unit) && reminder.channels.includes("app"))} requests={accessRequests.filter((item) => item.tenantId === tenant.id && item.unit === tenant.owner.unit)} plates={plateAuthorizations.filter((item) => item.tenantId === tenant.id && item.unit === tenant.owner.unit)} reservations={residentReservations.filter((item) => item.tenantId === tenant.id && item.unit === tenant.owner.unit)} onSaveRequest={(request) => setAccessRequests((current) => current.some((item) => item.id === request.id) ? current.map((item) => item.id === request.id ? request : item) : [request, ...current])} onCancelRequest={(id) => setAccessRequests((current) => current.map((item) => item.id === id ? { ...item, state: "cancelled" } : item))} onRequestPlate={(plate) => setPlateAuthorizations((current) => [plate, ...current])} onSaveReservation={(reservation) => setResidentReservations((current) => current.some((item) => item.id === reservation.id) ? current.map((item) => item.id === reservation.id ? reservation : item) : [reservation, ...current])} onCancelReservation={(id) => setResidentReservations((current) => current.map((item) => item.id === id ? { ...item, state: "cancelled" } : item))} onAction={setNotice} onExit={openRoleHub} />}
           </>}
         </main>
 
@@ -223,6 +244,7 @@ export function HabitaDemo() {
       </div>
 
       {paymentOpen && <PaymentPanel movement={movement} verified={verified} onMovement={setMovement} onVerified={setVerified} onClose={() => setPaymentOpen(false)} onConfirm={confirmPayment} />}
+      <DemoTools context={`${tenant.name} · ${roleProfile.label} · ${view}`} onReset={resetDemo} onNotice={setNotice} />
       {notice && <div className="toast" role="status"><Check aria-hidden="true" /><span>{notice}</span><button aria-label="Cerrar aviso" onClick={() => setNotice("")}><X /></button></div>}
     </div>
   );
@@ -311,7 +333,7 @@ function TowersView({ tenant, totals, onReviewPayment }: { tenant: (typeof demoT
   </>;
 }
 
-function PeopleView({ tenant }: { tenant: (typeof demoTenants)[number] }) {
+function PeopleView({ tenant, requests, plates, reservations, approver, onAccessState, onPlateState, onReservationState, onNotice }: { tenant: (typeof demoTenants)[number]; requests: AccessRequest[]; plates: PlateAuthorization[]; reservations: ResidentReservation[]; approver: string; onAccessState: (id: string, state: AccessRequest["state"]) => void; onPlateState: (id: string, state: PlateAuthorization["state"], approvedBy?: string) => void; onReservationState: (id: string, state: ResidentReservation["state"]) => void; onNotice: (message: string) => void }) {
   return <>
     <PageHeading title="Personas y accesos" description="Identidad, roles individuales, alcance y vigencia dentro de este condominio." />
     <section className="scope-note"><ShieldCheck /><div><strong>Una persona, permisos específicos</strong><span>Los permisos de pago, convivencia y voto se muestran separados. Esta demo no aplica autorización de servidor.</span></div></section>
@@ -322,20 +344,30 @@ function PeopleView({ tenant }: { tenant: (typeof demoTenants)[number] }) {
         <div className="permission-list" aria-label={`Permisos de ${person.name}`}>{person.permissions.map((permission) => <span key={permission}><Check />{permissionLabels[permission]}</span>)}</div>
       </article>)}
     </section>
+    <BoardAccessPanel tenant={tenant} requests={requests} plates={plates} reservations={reservations} approver={approver} onAccessState={onAccessState} onPlateState={onPlateState} onReservationState={onReservationState} onNotice={onNotice} />
   </>;
 }
 
-function OwnerView({ tenant, onAction, onExit }: { tenant: (typeof demoTenants)[number]; onAction: (message: string) => void; onExit: () => void }) {
+function OwnerView({ tenant, reminders, requests, plates, reservations, onSaveRequest, onCancelRequest, onRequestPlate, onSaveReservation, onCancelReservation, onAction, onExit }: { tenant: (typeof demoTenants)[number]; reminders: PaymentReminder[]; requests: AccessRequest[]; plates: PlateAuthorization[]; reservations: ResidentReservation[]; onSaveRequest: (request: AccessRequest) => void; onCancelRequest: (id: string) => void; onRequestPlate: (plate: PlateAuthorization) => void; onSaveReservation: (reservation: ResidentReservation) => void; onCancelReservation: (id: string) => void; onAction: (message: string) => void; onExit: () => void }) {
   const owner = tenant.owner;
+  const latestReminder = reminders[0];
+  const [tab, setTab] = useState<"home" | "receipts" | "access" | "reservations">("home");
+  const [reporting, setReporting] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [operation, setOperation] = useState("");
+  const [paymentReported, setPaymentReported] = useDemoState(`owner-payment:${tenant.id}`, false);
+  function reportPayment(event: React.FormEvent) { event.preventDefault(); setPaymentReported(true); setReporting(false); onAction("Pago ficticio reportado. La junta ya puede revisar la operación DEMO indicada."); }
   return <div className="owner-stage">
-    <div className="owner-context"><button className="owner-exit" onClick={onExit}><ArrowLeft />Volver a las demos</button><h1>Portal del propietario</h1><p>Una vista adaptable enfocada en saldo, recibos, avisos y acciones autorizadas.</p><div className="context-list"><span><ShieldCheck />Cuenta individual, no compartida por departamento</span><span><Users />Responsables con permisos y vigencia propios</span><span><Landmark />El condominio conserva el historial</span></div></div>
+    <div className="owner-context"><button className="owner-exit" onClick={onExit}><ArrowLeft />Volver a las demos</button><h1>Portal del propietario</h1><p>Saldo, accesos, cochera y reservas conectados con portería y la junta.</p><div className="context-list"><span><ShieldCheck />El residente crea y modifica sus solicitudes</span><span><Users />Portería recibe solo la información operativa</span><span><Landmark />La junta aprueba placas y puede anular registros</span></div></div>
     <section className="phone-frame" aria-label="Vista móvil del propietario">
-      <div className="phone-top"><button className="phone-exit" aria-label="Volver a las demos" onClick={onExit}><ArrowLeft /></button><div><small>{tenant.name}</small><strong>Hola, {owner.personName.split(" ")[0]}</strong></div><span className="avatar">{owner.personName.split(" ").map((part) => part[0]).join("")}</span></div>
-      <div className="unit-chip"><Home />Unidad {owner.unit}<ChevronDown /></div>
-      <article className={`balance-card ${owner.balance === 0 ? "settled" : ""}`}><span>{owner.balance === 0 ? "Estás al día" : "Saldo por pagar"}</span><strong>{money.format(owner.balance)}</strong><small>{owner.dueDate}</small>{owner.balance > 0 && <button onClick={() => onAction("Se abrió el flujo demo para reportar un pago. No se envió información.")}>Reportar pago <ArrowRight /></button>}</article>
-      <section className="owner-section"><div className="section-heading"><h2>Mi recibo</h2><span>Septiembre</span></div><button className="receipt-card" onClick={() => onAction("Vista previa demo del recibo. No es un comprobante tributario.")}><span className="row-icon"><ReceiptText /></span><span><strong>{owner.pendingReceipt}</strong><small>{owner.balance === 0 ? "Pagado en demo" : "Pendiente"}</small></span><ArrowRight /></button></section>
-      <section className="owner-section"><div className="section-heading"><h2>Comunicados</h2><span>{owner.announcements.length} nuevos</span></div>{owner.announcements.map((announcement) => <div className="announcement" key={announcement.title}><span className="announce-dot" /><span><strong>{announcement.title}</strong><small>{announcement.meta}</small></span></div>)}</section>
-          <nav className="phone-nav"><button className="active" aria-current="page" onClick={() => onAction("Ya estás en el inicio del portal del propietario.")}><Home />Inicio</button><button onClick={() => onAction("El historial completo de recibos requiere persistencia y queda desactivado en esta demo.")}><ReceiptText />Recibos</button><button onClick={() => onAction("Las solicitudes de reserva del propietario se validan en el módulo de junta, sin envío real.")}><CalendarDays />Reservas</button></nav>
+      <div className="owner-scroll"><div className="phone-top"><button className="phone-exit" aria-label="Volver a las demos" onClick={onExit}><ArrowLeft /></button><div><small>{tenant.name}</small><strong>Hola, {owner.personName.split(" ")[0]}</strong></div><span className="avatar">{owner.personName.split(" ").map((part) => part[0]).join("")}</span></div>
+        <div className="unit-chip"><Home />Unidad {owner.unit} · {owner.parking.level} {owner.parking.number}<ChevronDown /></div>
+        {tab === "home" && <>{latestReminder && <section className="owner-payment-alert" aria-label="Nueva alerta de pago"><span className="row-icon"><Bell /></span><div><span>Nueva alerta de pago</span><strong>Recordatorio de la junta</strong><p>{latestReminder.message}</p><small>{latestReminder.sender} · {latestReminder.sentAt}{latestReminder.channels.includes("email") ? " · también enviado por correo demo" : ""}</small></div></section>}<article className={`balance-card ${owner.balance === 0 ? "settled" : ""}`}><span>{owner.balance === 0 ? "Estás al día" : paymentReported ? "Pago reportado · por verificar" : "Saldo por pagar"}</span><strong>{money.format(owner.balance)}</strong><small>{owner.dueDate}</small>{owner.balance > 0 && !paymentReported && <button onClick={() => setReporting(true)}>Reportar pago <ArrowRight /></button>}{paymentReported && <span className="status warning">En revisión de la junta</span>}</article>{reporting && <form className="owner-section owner-payment-form" onSubmit={reportPayment}><div className="section-heading"><h2>Reportar pago ficticio</h2><button type="button" className="text-button" onClick={() => setReporting(false)}>Cancelar</button></div><label className="field"><span>Importe</span><input value={owner.balance} readOnly /></label><label className="field"><span>Número de operación</span><input required minLength={4} maxLength={30} value={operation} onChange={(event) => setOperation(event.target.value)} placeholder="Ej. DEMO-0909" /></label><button className="primary-button">Enviar a revisión</button></form>}<section className="owner-section"><div className="section-heading"><h2>Comunicados</h2><span>{owner.announcements.length} nuevos</span></div>{owner.announcements.map((announcement) => <div className="announcement" key={announcement.title}><span className="announce-dot" /><span><strong>{announcement.title}</strong><small>{announcement.meta}</small></span></div>)}</section></>}
+        {tab === "receipts" && <section className="owner-section owner-tab-section"><div className="section-heading"><h2>Mis recibos</h2><span>Septiembre</span></div><button className="receipt-card" onClick={() => setReceiptOpen(true)}><span className="row-icon"><ReceiptText /></span><span><strong>{owner.pendingReceipt}</strong><small>{owner.balance === 0 ? "Pagado en demo" : "Pendiente"}</small></span><ArrowRight /></button>{receiptOpen && <article className="owner-receipt-preview"><div><ReceiptText /><strong>Recibo ficticio · septiembre 2026</strong></div><dl><div><dt>Unidad</dt><dd>{owner.unit}</dd></div><div><dt>Mantenimiento</dt><dd>{money.format(owner.balance)}</dd></div><div><dt>Estado</dt><dd>{paymentReported ? "Pago reportado" : "Pendiente"}</dd></div></dl><p>No es un comprobante tributario ni genera una obligación real.</p><button className="secondary-button compact" onClick={() => setReceiptOpen(false)}>Cerrar vista previa</button></article>}</section>}
+        {tab === "access" && <OwnerAccessView tenant={tenant} requests={requests} plates={plates} onSaveRequest={onSaveRequest} onCancelRequest={onCancelRequest} onRequestPlate={onRequestPlate} onNotice={onAction} />}
+        {tab === "reservations" && <OwnerReservationsView tenant={tenant} reservations={reservations} onSave={onSaveReservation} onCancel={onCancelReservation} onNotice={onAction} />}
+      </div>
+      <nav className="phone-nav items-4"><button className={tab === "home" ? "active" : ""} aria-current={tab === "home" ? "page" : undefined} onClick={() => setTab("home")}><Home />Inicio</button><button className={tab === "receipts" ? "active" : ""} aria-current={tab === "receipts" ? "page" : undefined} onClick={() => setTab("receipts")}><ReceiptText />Recibos</button><button className={tab === "access" ? "active" : ""} aria-current={tab === "access" ? "page" : undefined} onClick={() => setTab("access")}><Users />Accesos</button><button className={tab === "reservations" ? "active" : ""} aria-current={tab === "reservations" ? "page" : undefined} onClick={() => setTab("reservations")}><CalendarDays />Reservas</button></nav>
     </section>
   </div>;
 }

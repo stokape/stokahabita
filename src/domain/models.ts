@@ -44,6 +44,7 @@ export type PersonAccess = {
 export type OwnerSnapshot = {
   personName: string;
   unit: string;
+  parking: { level: string; number: string };
   balance: number;
   dueDate: string;
   pendingReceipt: string;

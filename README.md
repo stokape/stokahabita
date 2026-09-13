@@ -9,7 +9,9 @@ npm install
 npm run dev
 ```
 
-Abre `http://localhost:3000`. La portada usa únicamente datos ficticios en memoria y declara esa condición dentro de la interfaz.
+Abre `http://localhost:3000`. La portada usa únicamente datos ficticios. Las acciones demostrativas se guardan en el almacenamiento local del navegador y pueden eliminarse con `Reiniciar`.
+
+Para una evaluación ordenada, usa `Cómo probar` y recorre los cinco casos sugeridos cambiando de perfil. `Enviar feedback` guarda cada comentario con el condominio, perfil y módulo actuales. Desde ese panel la junta puede compartir, copiar o descargar el archivo `feedback-stoka-habita.json` para enviarlo al equipo.
 
 ## PostgreSQL local y aislamiento
 
@@ -33,8 +35,10 @@ Abre `http://localhost:3002/database`. El acceso de desarrollo permite probar la
 - Los Jardines con 3 torres, 96 unidades y vista comparativa.
 - Parque del Sol con 1 edificio, 24 unidades y vista simplificada.
 - Panel de junta, unidades, personas/permisos, finanzas, morosidad y convenios, proveedores y concursos, portería, conciliación, mantenimiento, reservas, incidencias, asambleas, documentos, comunicados, transferencia de gestión, operador y portal móvil.
+- Alertas de pago desde las demos de presidente, tesorero y secretario: selección múltiple de responsables, entrega visible en el portal demo del propietario y simulación explícita del canal correo.
 - Portada con ocho demos independientes para presidente, tesorero y secretario de junta; propietario; administrador de condominio; conserje de turno; personal de mantenimiento; y super admin de Stoka Habita. Cada perfil abre su propio espacio y permite volver con `Cambiar demo`; esta selección no sustituye autenticación ni autorización de servidor.
-- Interacciones demo con estado en memoria y mensajes explícitos cuando no existe persistencia o integración.
+- Interacciones demo persistentes en el navegador, reinicio controlado, recorridos guiados y feedback exportable.
+- Formularios ficticios para unidades, emisiones, activos, convocatorias, incidencias y pagos reportados; vistas de documentos, recibos, inventario, consumibles y garantías.
 - Esquema PostgreSQL para 21 entidades, migraciones, datos semilla, RLS por tenant y auditoría inmutable.
 - Confirmación persistente de pagos con permiso de servidor, bloqueo de duplicados, transacción y registro de auditoría.
 - Sesión cifrada local y verificación negativa de cruce entre tenants.
