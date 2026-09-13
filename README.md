@@ -64,3 +64,8 @@ npm run payments:verify
 No están conectados un proveedor real de identidad, correo, almacenamiento privado, banco, pasarela, reuniones, facturación electrónica ni monitoreo. Las automatizaciones jurídicas —intereses, multas, quórum y voto formal— requieren validación legal peruana. El backlog y el contrato visual se conservan como documentación local no versionada.
 
 El código se versiona en GitHub. El despliegue y los servicios externos se configuran por separado.
+
+## Autor
+
+- **Stoka Peru** — stoka.peru@gmail.com
+- Repositorio: [github.com/stokape/stokahabita](https://github.com/stokape/stokahabita)

@@ -2,6 +2,11 @@
   "name": "stoka-habita",
   "version": "0.1.0",
   "private": true,
+  "author": "Stoka Peru <stoka.peru@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stokape/stokahabita"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
